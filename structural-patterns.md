@@ -554,6 +554,458 @@ Use `var(--p-color-bg-fill-success)` for green bars, `var(--p-color-bg-fill-crit
 
 ---
 
+## Pattern 11: Node Palette (Action Picker Sidebar)
+
+A draggable sidebar list for workflow/flow builders. Each item has a colored icon circle, title + description, and a hover chevron — modeled on the Shopify Flow trigger selector.
+
+### Structure
+
+```
+┌─────────────────────────────────┐
+│ Add action                      │
+│                                 │
+│ MESSAGES                        │
+│ ┌ 💬 ─ LINE Message ──── › ┐  │
+│ │     Send a LINE message   │  │
+│ └───────────────────────────┘  │
+│ ┌ 📱 ─ SMS ──────────── › ┐  │
+│ │     Send an SMS text      │  │
+│ └───────────────────────────┘  │
+│                                 │
+│ LOYALTY                         │
+│ ┌ 🪙 ─ Award Currency ── › ┐  │
+│ │     Give points or tickets│  │
+│ └───────────────────────────┘  │
+│ ...                             │
+└─────────────────────────────────┘
+```
+
+### Data shape
+
+```js
+const nodeGroups = [
+  {
+    label: 'Messages',
+    nodes: [
+      { type: 'action', subType: 'send_line', label: 'LINE Message', desc: 'Send a LINE message', icon: '💬', color: '#06C755' },
+      { type: 'action', subType: 'send_sms', label: 'SMS', desc: 'Send an SMS text message', icon: '📱', color: '#10B981' },
+    ],
+  },
+  // ...more groups
+];
+```
+
+### Template
+
+```vue
+<div class="node-palette">
+  <div class="palette-heading">Add action</div>
+  <div v-for="group in nodeGroups" :key="group.label" class="palette-group">
+    <div class="palette-group__label">{{ group.label }}</div>
+    <div
+      v-for="item in group.nodes"
+      :key="item.subType || item.type"
+      class="palette-item"
+      draggable="true"
+      @dragstart="onDragStart($event, item)"
+    >
+      <span class="palette-item__icon" :style="{ '--icon-bg': item.color + '14', '--icon-color': item.color }">{{ item.icon }}</span>
+      <div class="palette-item__text">
+        <span class="palette-item__label">{{ item.label }}</span>
+        <span v-if="item.desc" class="palette-item__desc">{{ item.desc }}</span>
+      </div>
+      <svg class="palette-item__chevron" width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M7.293 4.293a1 1 0 0 1 1.414 0l5 5a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414-1.414L11.586 10 7.293 5.707a1 1 0 0 1 0-1.414z"/></svg>
+    </div>
+  </div>
+</div>
+```
+
+### Styles
+
+```scss
+.node-palette {
+  display: flex;
+  flex-direction: column;
+  padding: var(--p-space-300);
+  height: 100%;
+  overflow-y: auto;
+  gap: var(--p-space-100);
+}
+
+.palette-heading {
+  font-size: var(--p-font-size-350);
+  font-weight: var(--p-font-weight-bold);
+  color: var(--p-color-text);
+  padding: var(--p-space-100) var(--p-space-200) var(--p-space-200);
+}
+
+.palette-group__label {
+  font-size: var(--p-font-size-275);
+  font-weight: var(--p-font-weight-semibold);
+  color: var(--p-color-text-secondary);
+  padding: var(--p-space-200) var(--p-space-200) var(--p-space-100);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--p-space-300);
+  padding: var(--p-space-200);
+  cursor: grab;
+  transition: background var(--p-motion-duration-150) var(--p-motion-ease);
+  border-radius: var(--p-border-radius-200);
+  min-height: 48px;
+
+  &:hover {
+    background: var(--p-color-bg-surface-hover);
+    .palette-item__chevron { opacity: 1; }
+  }
+  &:active { cursor: grabbing; background: var(--p-color-bg-surface-active); }
+
+  &__icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    border-radius: var(--p-border-radius-200);
+    background: var(--icon-bg, var(--p-color-bg-fill-secondary));
+    color: var(--icon-color, var(--p-color-text));
+  }
+
+  &__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  &__label { font-size: var(--p-font-size-300); font-weight: var(--p-font-weight-semibold); color: var(--p-color-text); }
+  &__desc { font-size: var(--p-font-size-275); color: var(--p-color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  &__chevron { flex-shrink: 0; color: var(--p-color-icon-secondary); opacity: 0; transition: opacity var(--p-motion-duration-150) var(--p-motion-ease); }
+}
+```
+
+Tint the icon background by appending `14` (8% alpha) to the hex color via inline style: `'--icon-bg': color + '14'`.
+
+---
+
+## Pattern 12: Entry Mode Radio Cards
+
+Selectable cards for choosing between 2–3 mutually exclusive modes. Each card has a radio input, icon, title, and description. Only one can be active at a time.
+
+### Use cases
+
+- Trigger entry type: "Audience" vs "Custom condition"
+- Export format: "CSV" vs "JSON" vs "PDF"
+- Schedule mode: "One-time" vs "Recurring"
+
+### Template
+
+```vue
+<div class="entry-type-selector">
+  <span class="entry-type-selector__label">Entry type</span>
+  <div class="entry-type-options">
+    <label
+      v-for="option in options" :key="option.value"
+      class="entry-type-option"
+      :class="{ 'entry-type-option--active': selected === option.value }"
+    >
+      <input type="radio" :value="option.value" :checked="selected === option.value" @change="select(option.value)" />
+      <div class="entry-type-option__content">
+        <span class="entry-type-option__icon">{{ option.icon }}</span>
+        <div>
+          <span class="entry-type-option__title">{{ option.label }}</span>
+          <span class="entry-type-option__desc">{{ option.desc }}</span>
+        </div>
+      </div>
+    </label>
+  </div>
+</div>
+```
+
+### Styles
+
+```scss
+.entry-type-selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-space-200);
+
+  &__label {
+    font-size: var(--p-font-size-300);
+    font-weight: var(--p-font-weight-semibold);
+    color: var(--p-color-text);
+  }
+}
+
+.entry-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-space-150);
+}
+
+.entry-type-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--p-space-200);
+  padding: var(--p-space-300);
+  border: 1px solid var(--p-color-border);
+  border-radius: var(--p-border-radius-200);
+  cursor: pointer;
+  transition: all var(--p-motion-duration-150) var(--p-motion-ease);
+  background: var(--p-color-bg-surface);
+
+  input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: var(--p-color-bg-fill-brand);
+  }
+
+  &:hover { background: var(--p-color-bg-surface-hover); }
+  &--active { border-color: var(--p-color-border-brand); background: var(--p-color-bg-surface-selected); }
+
+  &__content { display: flex; align-items: flex-start; gap: var(--p-space-200); flex: 1; }
+  &__icon { font-size: 18px; flex-shrink: 0; line-height: 1.2; }
+  &__title { display: block; font-size: var(--p-font-size-300); font-weight: var(--p-font-weight-medium); color: var(--p-color-text); }
+  &__desc { display: block; font-size: var(--p-font-size-275); color: var(--p-color-text-secondary); margin-top: 1px; }
+}
+```
+
+When the selected mode reveals additional UI (a dropdown, a condition builder, etc.), render that below the radio cards in a separate `PolarisCard`.
+
+---
+
+## Pattern 13: Config Panel Chrome
+
+Standard header/footer for a side panel that edits a selected item (workflow node, record, entity). The header shows a colored icon badge, type label, editable title input, and a close button. The footer has Cancel + Save buttons.
+
+### Structure
+
+```
+┌──────────────────────────────────────┐
+│ [🎯] TRIGGER                    [×] │
+│      Entry Trigger                   │
+├──────────────────────────────────────┤
+│                                      │
+│  (config content — subdued bg)       │
+│  ┌─ Card ───────────────────────┐   │
+│  │ ...form fields...            │   │
+│  └──────────────────────────────┘   │
+│                                      │
+├──────────────────────────────────────┤
+│              [Cancel] [Save]         │
+└──────────────────────────────────────┘
+```
+
+### Styles
+
+```scss
+.config-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.config-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--p-space-400);
+  border-bottom: var(--p-border-width-025) solid var(--p-color-border);
+  flex-shrink: 0;
+}
+
+.config-panel__icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--p-border-radius-200);
+  font-size: 18px;
+  flex-shrink: 0;
+  // Set background per node type: e.g. --trigger: #E0E7FF, --condition: #DBEAFE
+}
+
+.config-panel__type-label {
+  font-size: var(--p-font-size-275);
+  color: var(--p-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.config-panel__title-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  outline: none;
+  font-size: var(--p-font-size-325);
+  font-weight: var(--p-font-weight-semibold);
+  color: var(--p-color-text);
+}
+
+.config-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--p-space-400);
+  background: var(--p-color-bg-surface-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-space-400);
+}
+
+.config-panel__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--p-space-200);
+  padding: var(--p-space-400);
+  border-top: var(--p-border-width-025) solid var(--p-color-border);
+  flex-shrink: 0;
+}
+```
+
+The content area uses `bg-surface-secondary` so child `PolarisCard` blocks pop visually. Use `PolarisButton` for footer actions — default variant for Cancel, primary for Save.
+
+---
+
+## Pattern 14: Variable Reference Panel
+
+A collapsible panel showing available template variables (e.g., `{{user.firstname}}`). Common in messaging, action, and agent config panels. Sits outside the main card sections, typically at the bottom of the config content.
+
+### Template
+
+```vue
+<div class="variable-ref">
+  <button class="variable-ref__toggle" @click="showVars = !showVars">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+      <path v-if="showVars" d="M2 4l4 4 4-4"/>
+      <path v-else d="M4 2l4 4-4 4"/>
+    </svg>
+    Available variables
+  </button>
+  <div v-if="showVars" class="variable-ref__list">
+    <div v-for="group in varGroups" :key="group.label" class="variable-ref__group">
+      <span class="variable-ref__group-label">{{ group.label }}</span>
+      <code v-for="v in group.vars" :key="v">{{ v }}</code>
+    </div>
+  </div>
+</div>
+```
+
+### Styles
+
+```scss
+.variable-ref {
+  border-top: 1px solid var(--p-color-border);
+  padding-top: var(--p-space-300);
+}
+
+.variable-ref__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--p-space-150);
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--p-font-size-275);
+  font-weight: var(--p-font-weight-medium);
+  color: var(--p-color-text-secondary);
+  cursor: pointer;
+
+  &:hover { color: var(--p-color-text); }
+  svg { transition: transform var(--p-motion-duration-150) var(--p-motion-ease); }
+}
+
+.variable-ref__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-space-300);
+  padding-top: var(--p-space-200);
+}
+
+.variable-ref__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--p-space-100);
+  align-items: center;
+}
+
+.variable-ref__group-label {
+  font-size: var(--p-font-size-275);
+  font-weight: var(--p-font-weight-semibold);
+  color: var(--p-color-text-secondary);
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.variable-ref code {
+  background: var(--p-color-bg-surface-secondary);
+  padding: 2px 6px;
+  border-radius: var(--p-border-radius-100);
+  font-family: var(--p-font-family-mono);
+  font-size: 11px;
+  color: var(--p-color-text);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover { background: var(--p-color-bg-surface-hover); }
+}
+```
+
+---
+
+## Pattern 15: Status Badge (Toolbar)
+
+Inline status indicator for toolbars and headers. A colored dot + label inside a pill shape.
+
+### Template
+
+```vue
+<span class="toolbar__badge" :class="isActive ? 'toolbar__badge--live' : 'toolbar__badge--draft'">
+  <span class="toolbar__badge-dot"></span>
+  {{ isActive ? 'Live' : 'Draft' }}
+</span>
+```
+
+### Styles
+
+```scss
+.toolbar__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: var(--p-font-size-275);
+  font-weight: var(--p-font-weight-medium);
+
+  &--draft {
+    background: var(--p-color-bg-surface-secondary);
+    color: var(--p-color-text-secondary);
+  }
+  &--live {
+    background: var(--p-color-bg-fill-success-secondary);
+    color: var(--p-color-text-success);
+  }
+}
+
+.toolbar__badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+
+  .toolbar__badge--draft & { background: var(--p-color-icon-secondary); }
+  .toolbar__badge--live & { background: var(--p-color-icon-success); }
+}
+```
+
+Extend with additional variants as needed (e.g., `--warning`, `--critical`).
+
+---
+
 ## Component Choice Guide
 
 | Need | Use |
@@ -573,6 +1025,11 @@ Use `var(--p-color-bg-fill-success)` for green bars, `var(--p-color-bg-fill-crit
 | Multi-value input | Custom `.tag-input-wrapper` (Pattern 9) |
 | Natural language rule | Custom `.constraint-row` (Pattern 8) |
 | Filter conditions | Condition Builder composition (Pattern 5) |
+| Draggable action picker sidebar | Node Palette (Pattern 11) |
+| Mode selection (2–3 exclusive options) | Entry Mode Radio Cards (Pattern 12) |
+| Side panel editing header/footer | Config Panel Chrome (Pattern 13) |
+| Template variable reference | Variable Reference Panel (Pattern 14) |
+| Toolbar status indicator (Live/Draft) | Status Badge (Pattern 15) |
 
 ## Rules
 
