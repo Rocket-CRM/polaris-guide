@@ -1006,6 +1006,500 @@ Extend with additional variants as needed (e.g., `--warning`, `--critical`).
 
 ---
 
+## Pattern 16: Multi-View Navigation Shell
+
+Extension of Pattern 1 for components with 3+ views (e.g., list / builder / detail). Uses WeWeb internal variables for state and exposed component actions for programmatic navigation.
+
+### State management
+
+```javascript
+const { value: currentView, setValue: setCurrentView } = wwLib.wwVariable.useComponentVariable({
+  uid: props.uid,
+  name: 'currentView',
+  type: 'string',
+  defaultValue: 'list',
+});
+
+const { value: selectedItemId, setValue: setSelectedItemId } = wwLib.wwVariable.useComponentVariable({
+  uid: props.uid,
+  name: 'selectedItemId',
+  type: 'string',
+  defaultValue: '',
+});
+```
+
+### Template
+
+```vue
+<template>
+  <div class="component-root">
+    <ListView
+      v-if="currentViewValue === 'list'"
+      :items="itemsData"
+      @create="handleCreate"
+      @view="handleViewDetail"
+      @edit="handleEdit"
+    />
+    <BuilderView
+      v-else-if="currentViewValue === 'builder'"
+      :item="editingItem"
+      @save="handleSave"
+      @cancel="handleBackToList"
+    />
+    <DetailView
+      v-else-if="currentViewValue === 'detail'"
+      :item="selectedItemObj"
+      @edit="handleEdit"
+      @back="handleBackToList"
+    />
+  </div>
+</template>
+```
+
+### Navigation helpers
+
+```javascript
+const navigateTo = (view, itemId = '') => {
+  setCurrentView(view);
+  if (itemId) setSelectedItemId(itemId);
+  emit('trigger-event', {
+    name: 'view-changed',
+    event: { view, itemId },
+  });
+};
+
+const handleBackToList = () => {
+  editingItem.value = null;
+  navigateTo('list');
+};
+```
+
+### Exposed actions for WeWeb workflows
+
+```javascript
+expose({
+  navigateToList: () => handleBackToList(),
+  navigateToBuilder: (data) => { /* ... */ },
+  navigateToDetail: (id) => { /* ... */ },
+});
+```
+
+Register in `ww-config.js`:
+
+```javascript
+actions: [
+  {
+    name: 'navigateToList',
+    label: { en: 'Navigate to List' },
+    action: 'navigateToList',
+  },
+  {
+    name: 'navigateToBuilder',
+    label: { en: 'Navigate to Builder' },
+    action: 'navigateToBuilder',
+    args: [
+      { name: 'itemData', type: 'Object', label: { en: 'Item Data (optional)' }, /* wwEditor:start */ bindable: true, /* wwEditor:end */ },
+    ],
+  },
+  // ...
+]
+```
+
+---
+
+## Pattern 17: Inline Confirmation
+
+Two approaches for confirming destructive actions without modal dialogs.
+
+### Approach A: Table-row inline replacement
+
+Replaces the action buttons in-place with confirmation text + Yes/Cancel. Best for list tables where actions happen per-row.
+
+```vue
+<td class="col-actions">
+  <div v-if="confirmDeleteId === item?.id" class="confirm-inline">
+    <PolarisText variant="bodySm" color="critical">
+      Delete this item? This cannot be undone.
+    </PolarisText>
+    <PolarisButton variant="critical" size="slim" @click="confirmDelete(item)">
+      Yes, delete
+    </PolarisButton>
+    <PolarisButton size="slim" @click="confirmDeleteId = null">Cancel</PolarisButton>
+  </div>
+  <div v-else class="action-buttons">
+    <PolarisButton variant="plain" size="slim" @click="$emit('edit', item)">Edit</PolarisButton>
+    <PolarisButton variant="plain" size="slim" @click="confirmDeleteId = item?.id">Delete</PolarisButton>
+  </div>
+</td>
+```
+
+### Styles
+
+```scss
+.confirm-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--p-space-200);
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--p-space-100);
+}
+```
+
+### Approach B: Banner-based confirmation
+
+Uses `PolarisBanner` below the action buttons. Best for detail views where there's more space.
+
+```vue
+<PolarisBlockStack gap="300">
+  <PolarisInline gap="200">
+    <PolarisButton
+      v-if="!showDeleteConfirm"
+      variant="critical"
+      @click="showDeleteConfirm = true"
+    >
+      Delete
+    </PolarisButton>
+  </PolarisInline>
+
+  <PolarisBanner
+    v-if="showDeleteConfirm"
+    variant="critical"
+    dismissible
+    @dismiss="showDeleteConfirm = false"
+  >
+    Are you sure? This cannot be undone.
+    <template #actions>
+      <PolarisButton variant="critical" size="slim" @click="handleDelete">
+        Yes, delete
+      </PolarisButton>
+    </template>
+  </PolarisBanner>
+</PolarisBlockStack>
+```
+
+### Guard pattern: block deletion of active items
+
+```vue
+<PolarisBanner
+  v-if="showDeleteConfirm && item?.is_active"
+  variant="critical"
+  dismissible
+  @dismiss="showDeleteConfirm = false"
+>
+  Deactivate the item before deleting.
+</PolarisBanner>
+```
+
+---
+
+## Pattern 18: AND/OR Group Connector
+
+Visual separator showing the logical operator between condition groups or rule blocks. Extends Pattern 5.
+
+### Template
+
+```vue
+<template v-for="(group, idx) in groups" :key="group.id">
+  <div v-if="idx > 0" class="group-connector">
+    <div class="group-connector__line"></div>
+    <span class="group-connector__badge">AND</span>
+    <div class="group-connector__line"></div>
+  </div>
+  <ConditionGroupCard :group="group" ... />
+</template>
+```
+
+### Styles
+
+```scss
+.group-connector {
+  display: flex;
+  align-items: center;
+  gap: var(--p-space-200);
+  padding: var(--p-space-200) 0;
+}
+
+.group-connector__line {
+  flex: 1;
+  height: 1px;
+  background: var(--p-color-border);
+}
+
+.group-connector__badge {
+  font-size: var(--p-font-size-300);
+  font-weight: var(--p-font-weight-semibold);
+  color: var(--p-color-text-secondary);
+  background: var(--p-color-bg-surface);
+  padding: var(--p-space-100) var(--p-space-300);
+  border-radius: var(--p-border-radius-full);
+  border: 1px solid var(--p-color-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+```
+
+Within condition rows, a simpler connector label:
+
+```scss
+.condition-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--p-space-100) 0;
+}
+
+.connector-label {
+  font-size: var(--p-font-size-300);
+  font-weight: var(--p-font-weight-semibold);
+  color: var(--p-color-text-secondary);
+  background: var(--p-color-bg-surface-secondary);
+  padding: 2px var(--p-space-200);
+  border-radius: var(--p-border-radius-100);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+```
+
+---
+
+## Pattern 19: Form Validation Error Display
+
+Dismissible error banner at the top of a form with a bulleted list of specific validation errors.
+
+### Template
+
+```vue
+<PolarisBanner
+  v-if="validationErrors.length"
+  variant="critical"
+  title="Please fix the following errors"
+  dismissible
+  @dismiss="validationErrors = []"
+>
+  <ul class="error-list">
+    <li v-for="(err, idx) in validationErrors" :key="idx">{{ err }}</li>
+  </ul>
+</PolarisBanner>
+```
+
+### Styles
+
+```scss
+.error-list {
+  margin: var(--p-space-100) 0 0;
+  padding-left: var(--p-space-400);
+
+  li {
+    margin-bottom: var(--p-space-100);
+  }
+
+  li:last-child {
+    margin-bottom: 0;
+  }
+}
+```
+
+### Validation logic pattern
+
+```javascript
+const validate = () => {
+  const errors = [];
+  if (!name.value?.trim()) {
+    errors.push('Name is required');
+  }
+  items.value.forEach((item, idx) => {
+    const label = `Item ${idx + 1}`;
+    if (!item.field) errors.push(`${label}: Field is required`);
+  });
+  return errors;
+};
+
+const handleSave = () => {
+  const errors = validate();
+  validationErrors.value = errors;
+  if (errors.length) return;
+  // proceed with save...
+};
+```
+
+### Inline field-level errors
+
+Combine with Polaris component `error` props for per-field feedback:
+
+```javascript
+const nameError = computed(() => {
+  if (validationErrors.value.length && !name.value?.trim()) {
+    return 'Name is required';
+  }
+  return '';
+});
+```
+
+```vue
+<PolarisTextField label="Name" :error="nameError" ... />
+```
+
+---
+
+## Pattern 20: Pagination / Load More
+
+A "load more" button inside a bordered table card, showing progress as "X of Y".
+
+### Template
+
+```vue
+<div class="table-wrap">
+  <table class="data-table">
+    <!-- thead + tbody -->
+  </table>
+
+  <div v-if="hasMore" class="table-pagination">
+    <PolarisButton variant="plain" @click="loadMore">
+      Load more ({{ items.length }} of {{ totalCount }})
+    </PolarisButton>
+  </div>
+</div>
+```
+
+### Styles
+
+```scss
+.table-wrap {
+  border: 1px solid var(--p-color-border);
+  border-radius: var(--p-border-radius-300);
+  background: var(--p-color-bg-surface);
+}
+
+.table-pagination {
+  padding: var(--p-space-300);
+  text-align: center;
+  border-top: 1px solid var(--p-color-border);
+}
+```
+
+### Logic
+
+```javascript
+const PAGE_SIZE = 50;
+const currentOffset = ref(0);
+
+const hasMore = computed(() => items.value.length < (totalCount.value || 0));
+
+const loadMore = () => {
+  currentOffset.value = items.value.length;
+  emit('load-page', {
+    limit: PAGE_SIZE,
+    offset: items.value.length,
+  });
+};
+```
+
+---
+
+## Pattern 21: Stats / Metrics Row
+
+A horizontal row of label + value stat items inside a card. Common for detail views and dashboards.
+
+### Template
+
+```vue
+<PolarisCard>
+  <PolarisCardSection>
+    <div class="stats-row">
+      <div class="stat-item">
+        <PolarisText variant="bodySm" color="subdued">Members</PolarisText>
+        <PolarisText variant="headingMd">{{ formatNumber(count) }}</PolarisText>
+      </div>
+      <div class="stat-item">
+        <PolarisText variant="bodySm" color="subdued">Created</PolarisText>
+        <PolarisText variant="bodyMd">{{ formatDate(createdAt) }}</PolarisText>
+      </div>
+      <div class="stat-item">
+        <PolarisText variant="bodySm" color="subdued">Updated</PolarisText>
+        <PolarisText variant="bodyMd">{{ formatDate(updatedAt) }}</PolarisText>
+      </div>
+    </div>
+  </PolarisCardSection>
+</PolarisCard>
+```
+
+### Styles
+
+```scss
+.stats-row {
+  display: flex;
+  gap: var(--p-space-800);
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-space-100);
+}
+```
+
+For numeric stats, use `variant="headingMd"`. For text/date stats, use `variant="bodyMd"`.
+
+---
+
+## Pattern 22: Empty State in Bordered Card
+
+Wrap `PolarisEmptyState` in a bordered card that visually matches the table wrapper, so loading → data → empty states all share consistent chrome.
+
+### Template
+
+```vue
+<!-- Data table when items exist -->
+<div v-if="items.length" class="table-wrap">
+  <table class="data-table">...</table>
+</div>
+
+<!-- Empty state in matching card -->
+<div v-else class="empty-wrap">
+  <PolarisEmptyState heading="No items yet" icon="📋">
+    Create your first item to get started.
+    <template #actions>
+      <PolarisButton variant="primary" @click="$emit('create')">
+        Create item
+      </PolarisButton>
+    </template>
+  </PolarisEmptyState>
+</div>
+```
+
+### Styles
+
+```scss
+.empty-wrap {
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--p-color-bg-surface);
+  border: 1px solid var(--p-color-border);
+  border-radius: var(--p-border-radius-300);
+}
+```
+
+### Contextual empty state messaging
+
+Vary the message based on component state for better UX:
+
+```vue
+<PolarisEmptyState heading="No members yet" icon="👤" compact>
+  {{ isActive
+    ? 'Members will appear here as users qualify.'
+    : 'Activate this item to start evaluating users.' }}
+</PolarisEmptyState>
+```
+
+---
+
 ## Component Choice Guide
 
 | Need | Use |
@@ -1030,6 +1524,14 @@ Extend with additional variants as needed (e.g., `--warning`, `--critical`).
 | Side panel editing header/footer | Config Panel Chrome (Pattern 13) |
 | Template variable reference | Variable Reference Panel (Pattern 14) |
 | Toolbar status indicator (Live/Draft) | Status Badge (Pattern 15) |
+| 3+ view CRUD navigation | Multi-View Navigation Shell (Pattern 16) |
+| Destructive action confirmation (table) | Inline Confirmation — row replacement (Pattern 17A) |
+| Destructive action confirmation (detail) | Inline Confirmation — banner (Pattern 17B) |
+| Logical operator between groups | AND/OR Group Connector (Pattern 18) |
+| Form validation errors | Validation Error Banner (Pattern 19) |
+| Paginated table with load-more | Pagination / Load More (Pattern 20) |
+| Key metrics display row | Stats / Metrics Row (Pattern 21) |
+| Empty table / list placeholder | Empty State in Bordered Card (Pattern 22) |
 
 ## Rules
 
@@ -1038,4 +1540,14 @@ Extend with additional variants as needed (e.g., `--warning`, `--critical`).
 - **Scoped styles only** — `.vue` files are raw SFCs compiled by `@weweb/cli`
 - **Use `?.` optional chaining** for all prop access (WeWeb requirement)
 - **Data binding** — always use `:modelValue` + `@update:modelValue` instead of `v-model`
-- **`accent-color`** — set `accent-color: var(--p-color-bg-fill-brand, #2C6ECB)` on native radio/checkbox inputs
+- **`accent-color`** — set once on the root element using `:deep()` so all child components inherit it:
+  ```scss
+  .component-root {
+    :deep(input[type="radio"]),
+    :deep(input[type="checkbox"]) {
+      accent-color: var(--p-color-bg-fill-brand, #2C6ECB);
+    }
+  }
+  ```
+- **BEM naming** — use double-dash for modifiers (`.th--first`, `.item--active`) per BEM convention
+- **Table typography** — use `--p-font-size-325` for table body text, `--p-font-size-275` for table headers. The smaller size reads better for dense data.
